@@ -396,7 +396,7 @@ kubectl port-forward <pod-name> 8080:8080
 Services provide a stable endpoint for pods. They are an abstraction used to provide a stable endpoint and load balance traffic across a group of pods. "Stable endpoint" in this context simply means that the service will always be available at a given URL even if the pod is destroyed and recreated. A network request goes to the service which in turns forwards it to the pod(s).
 
 ![image depicting how services function in a kubernetes environment](https://storage.googleapis.com/qvault-webapp-dynamic-assets/course_assets/7JCPRd3-1280x717.png)
-(image is property of [boot.dev](https://www.boot.dev))
+(image property of [boot.dev](https://www.boot.dev))
 
 Let's add a service for the 3 synergycat-web pods. Create a file called web-service.yaml and add the following:
 
@@ -476,20 +476,16 @@ kubectl get svc
 
 If not already running `kubectl proxy`, do so. 
 
-Run
-
-```
-
-
 
 ### Chapter 6 - Ingress
 
-An [ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/) resource exposes services to the outside world and is used often in production environments. From the docs:
+An [ingress](https://kubernetes.io/docs/concepts/services-networking/ingress) resource exposes services to the outside world and is used often in production environments. From the docs:
 
 
 > An Ingress may be configured to give Services externally-reachable URLs, load balance traffic, terminate SSL / TLS, and offer name-based virtual hosting. An Ingress controller is responsible for fulfilling the Ingress, usually with a load balancer, though it may also configure your edge router or additional frontends to help handle the traffic.
 >
 > An Ingress does not expose arbitrary ports or protocols. Exposing services other than HTTP and HTTPS to the internet typically uses a service of type Service.Type=NodePort or Service.Type=LoadBalancer.
 
-![image showing ingress function](https://storage.googleapis.com/qvault-webapp-dynamic-assets/course_assets/4Bu6KOe-826x400.png)
-(image is propert of [Boot.dev](https://www.boot.dev))
+
+![image showing ingress functionality](https://storage.googleapis.com/qvault-webapp-dynamic-assets/course_assets/4Bu6KOe-826x400.png)
+(image property of [Boot.dev](https://www.boot.dev))
