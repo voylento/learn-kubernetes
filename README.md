@@ -4,11 +4,11 @@
 
 This README contains the notes I took when going through the [Boot.dev](https://www.boot.dev) course [Learn Kubernetes](https://www.boot.dev/courses/learn-kubernetes).
 
-The files in this project are the various config files I created while doing the exercises contained in the course. The notes, without having done the exercises, is of minimal value. They are for myself, and they are not a representation of all topics and details presented in the course. If you find my notes of any value, consider signing up for [Boot.dev](https://www.boot.dev). In my mind opinion, boot.dev offers some of the best software development training for the money.
+The files in this project are the various config files I created while doing the exercises contained in the course. The notes, without having done the exercises, is of minimal value. They are for myself, and they are not a representation of all topics and details presented in the course. If you are a software developer interested in learning Kubernetes, consider signing up for [Boot.dev](https://www.boot.dev). In my mind opinion, boot.dev offers some of the best software development training for the money.
 
 ### Chapter 1 - Install
 
-In this course we'll be using Kubernetes with Docker. Ensure Docker daemon is running before starting Minikube.
+In this course we'll be using Kubernetes with Docker. Will also be using Minikube. Ensure Docker daemon is running before starting Minikube.
 
 Install kubernetes command-line tool kubectl. For MacOS, 
 
@@ -395,6 +395,92 @@ kubectl port-forward <pod-name> 8080:8080
 
 Services provide a stable endpoint for pods. They are an abstraction used to provide a stable endpoint and load balance traffic across a group of pods. "Stable endpoint" in this context simply means that the service will always be available at a given URL even if the pod is destroyed and recreated. A network request goes to the service which in turns forwards it to the pod(s).
 
+![image depicting how services function in a kubernetes environment](https://storage.googleapis.com/qvault-webapp-dynamic-assets/course_assets/7JCPRd3-1280x717.png)
+(image is property of [boot.dev](https://www.boot.dev))
+
+Let's add a service for the 3 synergycat-web pods. Create a file called web-service.yaml and add the following:
+
+- `apiVersion: v1`
+- `kind`: `Service`
+- `metadata/name`: `web-service`
+- `spec/selector/app`: `synergychat-app`
+- `spec/ports`: An array of port objects. One entry required:
+    - `protocol`: `TCP` ([TCP will allow the use of HTTP](https://www.quora.com/What-is-the-difference-between-HTTP-protocol-and-TCP-protocol/answer/Daniel-Miller-7?ch=10&oid=3824340&share=340dfe9e&srid=iRqdc&target_type=answer))
+    - `port`: `8080` (this is the port the pods are listening on)
+
+`web-service` now
+
+- Listens for incoming traffic on port `80`
+- Forwards traffic to synergychat-web pods on port `8080`
+- The controller for the service continually scans for pods with the `app:synergychat-web` label selector and adds them to its pool.
+
+Create the service:
+
+```
+kubectl apply -f web-service.yaml
+```
+
+Forward the service's ports to local machine to test:
+
+```
+kubectl port-forward service/web-service 8080:80
+```
+
+Web app should now be available at `http://localhost:8080`
+
+#### Service Types
+
+There are several types of service. The default is ClusterIP. If you run:
+
+```
+kubectl get service web-service -o yaml
+```
+
+You'll see a section that shows:
+
+```
+spec:
+  clusterIP: <ip address>
+  ...
+  type: ClusterIP
+```
+
+The `clusterIP` is the IP address the service is bound to on the internal Kubernetes network. There are several other types of service, including:
+
+- NodePort
+- LoadBalancer
+- ExternalName
+
+Service types are documented [here](https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types)
+
+##### API Service
+
+Create an api service which will be responsible for handling requests from the front end and returning data from the db. Make the api service type "NodePort" to expose the api service to the outside world.
+
+Copy web-service.yaml to api-service.yaml and make the following edits:
+
+- Name should be `api-service`
+- Should select pods using the `app: synergychat-api` key
+- Add `type: NodePort` to the `spec` section
+- add `nodePort: 30080` to the first object in the ports list
+
+Docs for NodePort service are [here](https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport)
+
+Apply the service and then check to ensure it is running:
+
+```
+kubectl get svc
+```
+
+(note: kubectl allows use of either `svc` or `service`)
+
+If not already running `kubectl proxy`, do so. 
+
+Run
+
+```
+
+
 
 ### Chapter 6 - Ingress
 
@@ -405,3 +491,5 @@ An [ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/) r
 >
 > An Ingress does not expose arbitrary ports or protocols. Exposing services other than HTTP and HTTPS to the internet typically uses a service of type Service.Type=NodePort or Service.Type=LoadBalancer.
 
+![image showing ingress function](https://storage.googleapis.com/qvault-webapp-dynamic-assets/course_assets/4Bu6KOe-826x400.png)
+(image is propert of [Boot.dev](https://www.boot.dev))
