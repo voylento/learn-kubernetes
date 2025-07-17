@@ -1,6 +1,10 @@
-# learn-kubernetes
+# Learn Kubernetes
 
 ## Course Notes
+
+This README contains the notes I took when going through the [Boot.dev](https://www.boot.dev) course [Learn Kubernetes](https://www.boot.dev/courses/learn-kubernetes).
+
+The files in this project are the various config files I created while doing the exercises contained in the course. The notes, without having done the exercises, is of minimal value. They are for myself, and they are not a representation of all topics and details presented in the course. If you find my notes of any value, consider signing up for [Boot.dev](https://www.boot.dev). In my mind opinion, boot.dev offers some of the best software development training for the money.
 
 ### Chapter 1 - Install
 
