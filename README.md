@@ -8,9 +8,9 @@ The files in this project are the various config files I created while doing the
 
 ### Chapter 1 - Install
 
-In this course we'll be using Kubernetes with Docker. Will also be using Minikube. Ensure Docker daemon is running before starting Minikube.
+In this course we'll be using [Kubernetes](https://kubernetes.io) with [Docker](https://www.docker.com). Will also be using [Minikube](https://minikube.sigs.k8s.io/docs/). Minikube is not for production deployments. Rather, it allows a developer to run a local cluster for the purpose of learning Kubernetes. Ensure Docker daemon is running before starting Minikube.
 
-Install kubernetes command-line tool kubectl. For MacOS, 
+[Install kubernetes](https://kubernetes.io/docs/tasks/tools/) command-line tool kubectl. For MacOS, 
 
 ```brew install kubectl```
 
@@ -27,30 +27,44 @@ Run:
 ```
 minikube start --extra-config "apiserver.cors-allowed-origins=["http://boot.dev"]"
 ```
+The extra configuration in the command above is to allow boot.dev to access the minikube cluster for exercise verification purposes.
 
-Run the dashboard:
+Run the Minikube dashboard:
 
 ```
 minikube dashboard --port=63840
 ```
 
+This course doesn't use the minikube dashboard in the course, but it is a good resource to view and manage our Kubernetes cluster. The port is set to 63840 because that is the port the [Bootdev.cli tool](https://github.com/bootdotdev/bootdev) checks to validate course assignments. The course expects that minikube will be running throughout the time the student is doing the course.
+
+The course is centered around to setting up the app [SynergyChat](https://github.com/bootdotdev/synergychat) to be deployed on Kubernetes.
+
 Deploy a container built by boot.dev for this course:
+
+`kubectl create deployment` creates a Kubernetes deployment. The minimum things that must be provided are the name of the deployment (can be anything) and the ID of the Docker image to deploy. Run the command below to create a _SynergyChat_ deployment. The command will deploy a container built from the [boot.dev SynergyChat-web docker image](https://hub.docker.com/search?q=bootdotdev).
+
 
 ```
 kubectl create deployment synergychat-web --image=docker.io/bootdotdev/synergychat-web:latest
 ```
 
-Verify deployment:
+View (and verify) deployment:
 
 ```
 kubectl get deployments
 ```
 
-Verify pods:
+By default, resources inside a Kubernetes cluster run on a private, isolated, network not visible outside the cluster. To access the application from one's local network, port forwarding is required.
+
+First, view the pods that were created when the `kubectl create deployment` command was run:
 
 ```
 kubectl get pods
 ```
+
+A pod is an abstraction over a container. Oversimplified, a pod is a running application.
+
+Since resources inside a K8 cluster are only accessible inside the cluster, we need to do some port forwarding to be able to access our K8 cluster (a single pod, for now) within the local network. PODNAME is the name of the pod you see when you run `kubectl get pods`. The pod name I see at the time I am writing these notes is `synergychat-web-f765d99db-8h6rh`.
 
 Run:
 ```
@@ -59,10 +73,15 @@ kubectl port-forward PODNAME 8080:8080
 
 Open browser to http://localhost:8080 and should see webpage called SynergyChat
 
+Note that using `kubectl port-forward` is not how access to pods happens in production. This is typically a technique used for development tasks, debugging, testing, temporarily connecting to a db, reaching services not meant to be publicly exposed. Production services rely on Services, Ingress Controllers, LoadBalanceer Services, NodePort Services, all of which are discussed later. Port-forwarding only works while the kubectl command is running and is not load balanced across multiple pods (it also, obviously, requires kubectl access).
+
+Minikube supports only a single node, so you don't get the real benefits of K8 (Kubernetes). It's great for learning, but not for real-world deployments.
+
+You can find some K8 case studies [here](https://www.cncf.io/case-studies/). [This one](https://www.cncf.io/case-studies/bloomberg/) from Bloomberg shows their experience deploying hundreds of clusters running thousands of nodes each.
 
 ### Chapeter 2 -- Pods
 
-Use `kubectl get pods` to see list of all running pods. Shoul just see one synergychat-web pod. Let's add a second instance.
+Use `kubectl get pods` to see list of all running pods. Should just see one synergychat-web pod at this point in the exercise. Let's add a second instance.
 
 ```
 kubectl edit deployment synergychat-web
@@ -78,6 +97,12 @@ spec:
 ```
 
 Run `kubectl get pods` again and should see two pods.
+
+To see what the containers are printing to stdout:
+
+```
+kubectl logs PODNAME
+```
 
 Kill the _older_ pid:
 
@@ -135,6 +160,12 @@ Once all 10 pods are in a ready state, run:
 kubectl proxy
 ```
 
+Now, viewing the contents of the url below (in browser or via curl) should show the deployment data for the synergychat-web app:
+
+```
+curl http://127.0.0.1:8001/apis/apps/v1/namespaces/default/deployments/synergychat-web
+```
+
 #### Replica Sets
 
 A replica set maintains a stable set of replica pods. Replica sets are managed by deployments so you usually don't need to deal with them directly, but they may be referenced in logs.
@@ -144,6 +175,8 @@ A replica set maintains a stable set of replica pods. Replica sets are managed b
 ```
 kubectl get replicasets
 ```
+
+Note: we never directly created a replica set. We created a deployment and the deployment created the replica set.
 
 #### YAML Config
 
@@ -173,31 +206,87 @@ There should be warning alerting you that the `last-applied-configuration` annot
 
 Download the YAML file again. The annotation should now be present. Apply the configuration again and you should not see the warning. _Save this YAML file in a git repo for this course. We'll be making more configuration files. Kubernetes is an "infra-as-code" tool, so it is important to keep the configuration files in a git repo._
 
-Kill the proxy server:
+Start the proxy server if not already running:
 
 ```
 kubectl proxy
 ```
 
+Note: like port forwarding, `kubectl proxy` is not something that is used in production, except for administrative tasks (sometimes). It is used primarily as a development and debugging tool. Production techniques for access use techniques like:
+
+*Direct API server access with proper authentication*:
+
+- Service accounts with RBAC
+- Client certificates
+- Bearer tokens
+- OIDC integration
+
+**API gateways** for external access to cluster services
+
+**Ingress controllers** with proper TLS termination
+
+**Service mesh** (Istio, Linkerd) for service-to-service communication
+
 #### API Service
 
-Now we will deploy a JSON API service. It is the backend for the synergychat application. By deploying the API and configuring the frontend to talk to it, we'll have created a working chat app.
+We've deployed multiple instances of the SynergyChat-web service. Now let's deploy a second service. 
+
+We will deploy a JSON API service. It is the backend for the synergychat application. By deploying the API and configuring the frontend to talk to it, we'll have created a functional chat app.
 
 Write the deployment file from scratch. Reference the [K8 docs](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#creating-a-deployment) as needed for proper structure.
 
 See the requirements to create the file in the [Boot.dev Ch3, Lesson 5 Description](https://www.boot.dev/lessons/4643aa6b-ede1-4f01-ab4c-9a05763ee0ef) for the deployment configuration required.
 
+Here is the file I created:
+
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: synergychat-api
+  name: synergychat-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: synergychat-api
+  template:
+    metadata:
+      labels:
+        app: synergychat-api
+    spec:
+      containers:
+        - image: bootdotdev/synergychat-api:latest
+          name: synergychat-api
+```
 #### Create the Deployment
 
 ```
 kubectl apply -f api-deployment.yaml
 ```
 
-Run:
+Run the proxy so we can access the api pod (if not already running):
 
 ```
 kubectl proxy
 ```
+
+Now view the data either in the browser or in the terminal:
+
+```
+curl http://localhost:127.0.0.1:8001/apis/apps/v1/namespaces/default/deployments/synergychat-api
+```
+
+You should see status code 200, `.kind` equal to `Deployment`, and JSON at `.status.unavailableReplicas` to be equal to 1
+
+Running
+
+```
+kubectl get pods
+```
+
+Should show that the SynergyChat-api service is in `CrashLoopBackoff` state
 
 #### Thrashing Pods
 
@@ -237,12 +326,12 @@ kubectl logs <pod-name>
 
 The logs for the synergychat-api pod shows that an environment variable is missing.
 
-Let's fix that by creating a ConfigMap. Create a new file names api-configmap.yaml and add the foolowing YAML to it:
+Let's fix that by creating a ConfigMap. Create a new file named api-configmap.yaml and add the foolowing YAML to it:
 
 - apiVersion: v1
 - kind: ConfigMap
 - metadata/name: synergychat-api-configmap
-- data/API_PORT: "8080:
+- data/API_PORT: "8080":
 
 Apply the config map:
 
@@ -254,6 +343,14 @@ We haven't yet connected the config map to the pod, so the pod should still be c
 ```
 kubectl get configmaps
 ```
+
+With `kubectl proxy` running, view the config maps url (browser or curl):
+
+```
+curl http://127.0.0.1:8001/api/v1/namespaces/default/configmaps/synergychat-api-configmap
+```
+
+You should see a status code 200, JSON `.kind` set to `ConfigMap`, and JSON `.data.API_PORT` equal to `8080`
 
 #### Apply the Config Map
 
@@ -302,23 +399,23 @@ With this config, Kubernetes will set the API_PORT environment variable to the v
 
 Apply the deployment using the same method used previously for applying config.
 
-Forward the API pod's 8080 port to the local machine so it can be tested:
+Forward the API pod's 8080 port to the local machine so it can be tested (again, this is a dev/test process, not a prod process):
 
 ```
 kubectl port-forward <pod-name> 8080:8080
 ```
 
-It should return a 404 right now:
-
+curl the endpoint:
 ```
 curl http://localhost:8080
 ```
+It should return a 404 right now.
 
 Note that config maps are insecure and sensitive information should not be stored in them. Anyone with access to the cluster can access the config maps.
 
 #### Crawler
 
-Let's create a crawler to crawls [Project Gutenberg](https://www.gutenberg.org/) and exposes its data via a JSON API.
+The last application to deploy in this K8 cluster is the crawler. The crawler crawls [Project Gutenberg](https://www.gutenberg.org/) and exposes its data via a JSON API.
 
 ##### Add a New Config Map
 
@@ -338,11 +435,30 @@ kubectl apply -f crawler-configmap.yaml
 
 ##### Add a New Deployment
 
+Maybe we got a bit ahead of ourselves by creating the crawler config map before creating the crawler deployment. Let's create the crawler deployment.
+
 Copy `api-deployment.yaml` to `crawler-deployment.yaml` and make the following changes:
 
 - Update all `synergychat-api` references to `synergychat-crawler`
 - Update the image URL to `bootdotdev/synergychat-crawler:lastest`
-- Update the environment variable references to match the new config map. Use the `envFrom` key instead of copying each key from the config map:
+- Update the environment variable references to match the new config map. 
+
+Note: using
+```
+...
+    env:
+      - name: THING_ONE
+        valueFrom:
+          configMapKeyRef:
+            name: synergychat-api-configmap
+            key: THING_ONE
+      - name: THING_TWO
+        valueFrom:
+          configMapKeyRef:
+            name: synergychat-api-configmap
+            key: THING_TWO
+```
+can be redundant. Let's use the `envFrom` key instead of copying each key from the config map:
 
 ```
 envFrom:
@@ -391,9 +507,15 @@ Once it is ready, forward the pod's 8080 port to your local machine for testing:
 kubectl port-forward <pod-name> 8080:8080
 ```
 
+Test the endpoint. We should see status code 200
+
+```
+curl -i http://localhost:8080/healthz
+```
+
 ### Chapter 5 - Services
 
-Services provide a stable endpoint for pods. They are an abstraction used to provide a stable endpoint and load balance traffic across a group of pods. "Stable endpoint" in this context simply means that the service will always be available at a given URL even if the pod is destroyed and recreated. A network request goes to the service which in turns forwards it to the pod(s).
+It isn't practical to spin up pods and connect to them individually, as we have been doing. Instead, we will switch to use services. [Services](https://kubernetes.io/docs/concepts/services-networking/service/) provide a stable endpoint for pods. They are an abstraction used to provide a stable endpoint and load balance traffic across a group of pods. "Stable endpoint" in this context simply means that the service will always be available at a given URL even if the pod is destroyed and recreated. A network request goes to the service which in turns forwards it to the pod(s).
 
 ![image depicting how services function in a kubernetes environment](https://storage.googleapis.com/qvault-webapp-dynamic-assets/course_assets/7JCPRd3-1280x717.png)
 (image property of [boot.dev](https://www.boot.dev))
@@ -408,13 +530,13 @@ Let's add a service for the 3 synergycat-web pods. Create a file called web-serv
     - `protocol`: `TCP` ([TCP will allow the use of HTTP](https://www.quora.com/What-is-the-difference-between-HTTP-protocol-and-TCP-protocol/answer/Daniel-Miller-7?ch=10&oid=3824340&share=340dfe9e&srid=iRqdc&target_type=answer))
     - `port`: `8080` (this is the port the pods are listening on)
 
-`web-service` now
+This creates a new service called `web-service` with the following properties: 
 
 - Listens for incoming traffic on port `80`
 - Forwards traffic to synergychat-web pods on port `8080`
 - The controller for the service continually scans for pods with the `app:synergychat-web` label selector and adds them to its pool.
 
-Create the service:
+Create the service by applying the web-service.yaml file:
 
 ```
 kubectl apply -f web-service.yaml
@@ -455,7 +577,7 @@ Service types are documented [here](https://kubernetes.io/docs/concepts/services
 
 ##### API Service
 
-Create an api service which will be responsible for handling requests from the front end and returning data from the db. Make the api service type "NodePort" to expose the api service to the outside world.
+Let's create an api service which will be responsible for handling requests from the front end and returning data from the db. Make the api service type "NodePort" to expose the api service to the outside world.
 
 Copy web-service.yaml to api-service.yaml and make the following edits:
 
@@ -466,6 +588,22 @@ Copy web-service.yaml to api-service.yaml and make the following edits:
 
 Docs for NodePort service are [here](https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport)
 
+My file looks like this:
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+spec:
+  type: NodePort
+  selector:
+    app: synergychat-api
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+      nodePort: 30080
+```
 Apply the service and then check to ensure it is running:
 
 ```
@@ -475,6 +613,10 @@ kubectl get svc
 (note: kubectl allows use of either `svc` or `service`)
 
 If not already running `kubectl proxy`, do so. 
+
+```
+curl http://127.0.0.1:8001/api/v1/namespaces/default/asp-service
+```
 
 
 ### Chapter 6 - Ingress
