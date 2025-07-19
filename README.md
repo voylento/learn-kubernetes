@@ -44,13 +44,13 @@ Deploy a container built by boot.dev for this course:
 `kubectl create deployment` creates a Kubernetes deployment. The minimum things that must be provided are the name of the deployment (can be anything) and the ID of the Docker image to deploy. Run the command below to create a _SynergyChat_ deployment. The command will deploy a container built from the [boot.dev SynergyChat-web docker image](https://hub.docker.com/search?q=bootdotdev).
 
 
-```
+```bash 
 kubectl create deployment synergychat-web --image=docker.io/bootdotdev/synergychat-web:latest
 ```
 
 View (and verify) deployment:
 
-```
+```bash
 kubectl get deployments
 ```
 
@@ -515,6 +515,8 @@ curl -i http://localhost:8080/healthz
 
 ### Chapter 5 - Services
 
+**Lesson 1**
+
 It isn't practical to spin up pods and connect to them individually, as we have been doing. Instead, we will switch to use services. [Services](https://kubernetes.io/docs/concepts/services-networking/service/) provide a stable endpoint for pods. They are an abstraction used to provide a stable endpoint and load balance traffic across a group of pods. "Stable endpoint" in this context simply means that the service will always be available at a given URL even if the pod is destroyed and recreated. A network request goes to the service which in turns forwards it to the pod(s).
 
 ![image depicting how services function in a kubernetes environment](https://storage.googleapis.com/qvault-webapp-dynamic-assets/course_assets/7JCPRd3-1280x717.png)
@@ -550,6 +552,8 @@ kubectl port-forward service/web-service 8080:80
 
 Web app should now be available at `http://localhost:8080`
 
+**Lesson 2**
+
 #### Service Types
 
 There are several types of service. The default is ClusterIP. If you run:
@@ -567,17 +571,23 @@ spec:
   type: ClusterIP
 ```
 
-The `clusterIP` is the IP address the service is bound to on the internal Kubernetes network. There are several other types of service, including:
+The `clusterIP` is the IP address the service is bound to on the internal Kubernetes network. ClusterIP is the default serice type and since we didn't specify another, that is the service type our SynergyChat-Web service defaulted to. There are several other types of service, including:
 
-- NodePort
-- LoadBalancer
-- ExternalName
+- `NodePort`: Exposes the Service on each Node's IP at a static port.
+- `LoadBalancer`: Creates external load balancer in a cloud environment and assigns a fixed, external IP to the service.
+- `ExternalName`: Maps the service to the contents of the `externalname` field. The mapping configures the cluster's DNS server to return a CNAME record with the external hostname value. No proxying is set up.
 
 Service types are documented [here](https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types)
 
+**Lesson 4**
+
+So far, we have created a web-deployment.yaml file to have K8s deploy the SynergyChat-web component of the app (3 instances), an api-deployment.yaml file to have K8s deploy deploy an instance of the the SynergyChat-api component, and crawler-deployment.yaml to have K8s deploy the crawler app. When then created an api-configmap.yaml file to move configuration files out of the api-deployment.yaml file and into a configuration file (Config Map), and we updated the api-deployment.yaml file to refer to the api config map. We created a config map for the crawler app too. 
+
+In this chapter, so far, we created a service to sit in front of the synergychat-web pods. We configured the web-service.yaml file to listen of port 80 and forward requests to port 8080, which is the port the synergychat-web pods are listening on.
+
 ##### API Service
 
-Let's create an api service which will be responsible for handling requests from the front end and returning data from the db. Make the api service type "NodePort" to expose the api service to the outside world.
+Now we will create a service for the api. The api is responsible for handling requests initiated by the synergychat-web component and returning data from the database to the web component. This time, we will create a `NodePort` service to expose the `api` service to the outside world.
 
 Copy web-service.yaml to api-service.yaml and make the following edits:
 
@@ -618,6 +628,63 @@ If not already running `kubectl proxy`, do so.
 curl http://127.0.0.1:8001/api/v1/namespaces/default/asp-service
 ```
 
+In the output, you should see JSON at `.kind` set to `Service` and JSON at `.spec.type` equal to `NodePort`
+
+**Lesson 5**
+
+Finally, let's add a service for the crawler app. the `api` service service is available to the front end (which is served to a client outside the cluster). The `crawler` service will need to be available to the `api` service (internal cluster only).
+
+Create a new service called `crawler-service`. Ensure it targets the proper crawler pods. It should default to ClusterIP because it is only needed internal to the cluster. Keep the configurations consistent with the other services. When finished, run `kubectl proxy` (if not already running) and then run:
+
+```
+curl http://127.0.0.1:8001/api/v1/namespaces/default/services/crawler-service
+```
+
+Aside from status code 200, you should see JSON at `.kind` with value `Service`, and JSON at `.spec.type` with value `ClusterIP`.
+
+Here is the crawler-service.yaml file I created:
+
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: crawler-service
+spec:
+  selector:
+    ape: synergychat-crawler
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+```
+
+**Lesson 6**
+
+Earlier it was said that `NodePort` and `LoadBalancer` services are sued to expose services outside the K8s cluster. But in most cloud-based K8s environments, you'll actually use an `Ingress` object to expose services. Ingress objects expose services outside the cluster and provide a lot of other functionality, such as:
+
+- Host multiple services on the same IP address
+- Host multiple services on the same port (path-based routing)
+-Terminate SSL
+- Integrate directly with external DNS and load balancers.
+
+Let's switch the `api` service from `NodePort` to `ClusterIP`. Next up we'll be learning to use `Ingress`.
+
+Here is my api-service.yaml file after making the change:
+
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+spec:
+  type: ClusterIP
+  selector:
+    app: synergychat-api
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+```
 
 ### Chapter 6 - Ingress
 
